@@ -9,7 +9,9 @@ This project has 2 parts:
 ## App Requirements
 The app will need to be available for both Android and iOS. The focus at first is going to be Android. 
 The app will be used to select which team the user is chearing for. The selected team is the only team that can trigger the goal light.
-Additionaly the app will be used to configure the Raspberry pi's network settings a la chromecast.
+
+Additionaly the app will be used to configure the Raspberry pi's network settings a la chromecast. To achieve chromecast like configuratiion I'm most likely going to use https://github.com/jasbur/RaspiWiFi. 
+
 Finally the app will allow the user to configure a delay. This delay is used to control when the light/horn goes off after a goal to prevent any spoilers. 
 
 ## Similar Project
