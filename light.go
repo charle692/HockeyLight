@@ -7,7 +7,7 @@ import (
 )
 
 func turnOnLight(pin *rpio.Pin) {
-	ticker := time.NewTicker(time.Second * 10)
+	ticker := time.NewTicker(time.Second * 69)
 	pin.Low()
 
 	for range ticker.C {
