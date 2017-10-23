@@ -46,13 +46,13 @@ type Status struct {
 // SchedulePath - Path to schedule
 const SchedulePath = "/api/v1/schedule"
 
-func retrieveSchedule(gameChan chan Game) {
+func retrieveSchedule(gameChan chan Game, waitingForGameToStart *bool, gameStarted *bool) {
 	// retrieve the schedule on initial load in case the device was powered off
 	getTodaysSchedule(gameChan)
 	ticker := time.NewTicker(time.Hour * 1)
 
 	for range ticker.C {
-		if !gameStarted && !waitingForGameToStart {
+		if !*gameStarted && !*waitingForGameToStart {
 			getTodaysSchedule(gameChan)
 		}
 	}
@@ -94,9 +94,9 @@ func isTeamPlayingToday(schedule *Schedule, gameChan chan Game) {
 	}
 }
 
-func waitForGameToStart(game Game, gameStartedChan chan string) {
-	setWaitingForGameToStart(true)
-	defer setWaitingForGameToStart(false)
+func waitForGameToStart(game Game, gameStartedChan chan string, waitingForGameToStart *bool) {
+	setWaitingForGameToStart(waitingForGameToStart, true)
+	defer setWaitingForGameToStart(waitingForGameToStart, false)
 	startDate, _ := time.Parse(time.RFC3339, game.GameDate)
 	startDateInUnix := startDate.Unix()
 	currentTime := time.Now().Unix()
@@ -112,4 +112,8 @@ func waitForGameToStart(game Game, gameStartedChan chan string) {
 	}
 
 	gameStartedChan <- game.Link
+}
+
+func setWaitingForGameToStart(waitingForGameToStart *bool, status bool) {
+	*waitingForGameToStart = status
 }

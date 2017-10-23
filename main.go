@@ -6,13 +6,12 @@ import (
 	"io/ioutil"
 	"net/http"
 	"time"
+
+	rpio "github.com/stianeikeland/go-rpio"
 )
 
-var gameStarted = false
-var waitingForGameToStart = false
-
 // TeamName - The team to listen to goals for
-const TeamName = "Montréal Canadiens"
+const TeamName = "Vancouver Canucks"
 
 // Domain - The domain of the api
 const Domain = "https://statsapi.web.nhl.com"
@@ -20,6 +19,7 @@ const Domain = "https://statsapi.web.nhl.com"
 // FeedData - Contains game feed data
 type FeedData struct {
 	LiveData LiveData `json:"liveData"`
+	GameData GameData `json:"gameData"`
 }
 
 // LiveData - Contains Live Game data
@@ -27,10 +27,19 @@ type LiveData struct {
 	LineScore LineScore `json:"linescore"`
 }
 
+// GameData - Contains the game status
+type GameData struct {
+	GameStatus GameStatus `json:"status"`
+}
+
+// GameStatus - Contains the game status
+type GameStatus struct {
+	AbstractGameState string `json:"abstractGameState"`
+}
+
 // LineScore - Contains Period and Team related data
 type LineScore struct {
-	CurrentPeriodOrdinal string `json:"currentPeriodOrdinal"`
-	Teams                Teams  `json:"teams"`
+	Teams Teams `json:"teams"`
 }
 
 // Teams - Contains Home and Away teams
@@ -62,34 +71,40 @@ type TeamData struct {
 }
 
 func main() {
-	gameChan := make(chan Game)
-	gameStartedChan := make(chan string)
-	goalChan := make(chan bool)
-	isItWorking := make(chan string)
+	waitingForGameToStart, gameStarted := false, false
+	gameChan, gameStartedChan, goalChan, winningTeam := make(chan Game), make(chan string), make(chan bool), make(chan string)
 	pin := initializeGPIOPin()
-	go retrieveSchedule(gameChan)
+	go retrieveSchedule(gameChan, &waitingForGameToStart, &gameStarted)
 
 	for {
 		select {
 		case game := <-gameChan:
-			go waitForGameToStart(game, gameStartedChan)
 			fmt.Printf("The %s are playing today!\n", TeamName)
+			go waitForGameToStart(game, gameStartedChan, &waitingForGameToStart)
 		case link := <-gameStartedChan:
-			go turnOnLight(pin)
-			go listenForGoals(link, goalChan, isItWorking)
+			gameStarted = true
 			fmt.Println("The game has started!")
+			go playHornAndTurnOnLight(pin)
+			go listenForGoals(link, goalChan, winningTeam)
 		case <-goalChan:
-			fmt.Printf("The %s have scored!", TeamName)
-			go turnOnLight(pin)
+			fmt.Printf("The %s have scored!\n", TeamName)
+			go playHornAndTurnOnLight(pin)
+		case team := <-winningTeam:
+			if team == TeamName {
+				fmt.Printf("The %s have won!\n", TeamName)
+				go playHornAndTurnOnLight(pin)
+			}
 		}
 	}
 }
 
-func listenForGoals(link string, goalChan chan bool, isItWorking chan string) {
+func listenForGoals(link string, goalChan chan bool, winningTeam chan string) {
 	ticker := time.NewTicker(time.Second * 3)
 	feedData := &FeedData{}
 	awayGoals := 0
 	homeGoals := 0
+	homeTeam := Home{}
+	awayTeam := Away{}
 
 	for range ticker.C {
 		resp, err := http.Get(Domain + link)
@@ -105,22 +120,32 @@ func listenForGoals(link string, goalChan chan bool, isItWorking chan string) {
 			panic(err)
 		}
 
-		if feedData.LiveData.LineScore.Teams.Away.Team.Name == TeamName && feedData.LiveData.LineScore.Teams.Away.Goals > awayGoals {
-			awayGoals = feedData.LiveData.LineScore.Teams.Away.Goals
+		awayTeam = feedData.LiveData.LineScore.Teams.Away
+		homeTeam = feedData.LiveData.LineScore.Teams.Home
+
+		if awayTeam.Team.Name == TeamName && awayTeam.Goals > awayGoals {
+			awayGoals = awayTeam.Goals
 			goalChan <- true
 		}
 
-		if feedData.LiveData.LineScore.Teams.Home.Team.Name == TeamName && feedData.LiveData.LineScore.Teams.Home.Goals > homeGoals {
-			homeGoals = feedData.LiveData.LineScore.Teams.Home.Goals
+		if homeTeam.Team.Name == TeamName && homeTeam.Goals > homeGoals {
+			homeGoals = homeTeam.Goals
 			goalChan <- true
 		}
 
-		if feedData.LiveData.LineScore.CurrentPeriodOrdinal == "Final" {
+		if feedData.GameData.GameStatus.AbstractGameState == "Final" {
+			if awayGoals > homeGoals {
+				winningTeam <- awayTeam.Team.Name
+			} else {
+				winningTeam <- homeTeam.Team.Name
+			}
+
 			return
 		}
 	}
 }
 
-func setWaitingForGameToStart(waiting bool) {
-	waitingForGameToStart = waiting
+func playHornAndTurnOnLight(pin *rpio.Pin) {
+	go playHorn()
+	go turnOnLight(pin)
 }
