@@ -1,16 +1,12 @@
 package main
 
-import (
-	"time"
+import rpio "github.com/stianeikeland/go-rpio"
 
-	rpio "github.com/stianeikeland/go-rpio"
-)
-
-func turnOnLight(pin *rpio.Pin) {
-	ticker := time.NewTicker(time.Second * 69)
+func turnOnLight(pin *rpio.Pin, hornDone chan struct{}) {
 	pin.Low()
 
-	for range ticker.C {
+	select {
+	case <-hornDone:
 		pin.High()
 	}
 }

@@ -11,7 +11,7 @@ import (
 )
 
 // TeamName - The team to listen to goals for
-const TeamName = "Vancouver Canucks"
+const TeamName = "New York Rangers"
 
 // Domain - The domain of the api
 const Domain = "https://statsapi.web.nhl.com"
@@ -84,18 +84,20 @@ func main() {
 		case link := <-gameStartedChan:
 			gameStarted = true
 			fmt.Println("The game has started!")
-			go playHornAndTurnOnLight(pin)
+			playHornAndTurnOnLight(pin)
 			go listenForGoals(link, goalChan, winningTeam)
 		case <-goalChan:
 			fmt.Printf("The %s have scored!\n", TeamName)
-			go playHornAndTurnOnLight(pin)
+			playHornAndTurnOnLight(pin)
 		case team := <-winningTeam:
 			if team == TeamName {
 				fmt.Printf("The %s have won!\n", TeamName)
-				go playHornAndTurnOnLight(pin)
+				playHornAndTurnOnLight(pin)
 			}
 		}
 	}
+
+	select {}
 }
 
 func listenForGoals(link string, goalChan chan bool, winningTeam chan string) {
@@ -146,6 +148,7 @@ func listenForGoals(link string, goalChan chan bool, winningTeam chan string) {
 }
 
 func playHornAndTurnOnLight(pin *rpio.Pin) {
-	go playHorn()
-	go turnOnLight(pin)
+	hornDone := make(chan struct{})
+	go playHorn(hornDone)
+	go turnOnLight(pin, hornDone)
 }
