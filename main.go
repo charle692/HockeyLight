@@ -96,8 +96,6 @@ func main() {
 			}
 		}
 	}
-
-	select {}
 }
 
 func listenForGoals(link string, goalChan chan bool, winningTeam chan string) {
