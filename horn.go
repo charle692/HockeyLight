@@ -1,33 +1,23 @@
 package main
 
 import (
-	"os"
+	"fmt"
+	"os/exec"
 	"strings"
-	"time"
-
-	"github.com/faiface/beep"
-	"github.com/faiface/beep/speaker"
-	"github.com/faiface/beep/wav"
 )
 
-func playHorn(hornDone chan struct{}) {
-	done := make(chan struct{})
-	f, err := os.Open("horns/" + strings.Replace(strings.ToLower(TeamName), " ", "_", -1) + ".wav")
+func playHorn(hornDone chan bool) {
+	fileName := "./horns/"
+	fileName += strings.Replace(strings.ToLower(TeamName), " ", "_", -1)
+	fileName += ".wav"
+	fmt.Printf("%s", fileName)
+
+	cmdArgs := []string{fileName}
+	_, err := exec.Command("aplay", cmdArgs...).Output()
 
 	if err != nil {
-		panic(err)
+		fmt.Printf("There was an error running aplay: %s\n", err)
 	}
 
-	s, format, err := wav.Decode(f)
-
-	if err != nil {
-		panic(err)
-	}
-
-	speaker.Init(format.SampleRate, format.SampleRate.N(time.Second/2))
-	speaker.Play(beep.Seq(s, beep.Callback(func() {
-		close(hornDone)
-		close(done)
-	})))
-	<-done
+	hornDone <- true
 }

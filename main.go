@@ -11,7 +11,7 @@ import (
 )
 
 // TeamName - The team to listen to goals for
-const TeamName = "New York Rangers"
+const TeamName = "Ottawa Senators"
 
 // Domain - The domain of the api
 const Domain = "https://statsapi.web.nhl.com"
@@ -110,14 +110,14 @@ func listenForGoals(link string, goalChan chan bool, winningTeam chan string) {
 		resp, err := http.Get(Domain + link)
 
 		if err != nil {
-			panic(err)
+			fmt.Printf("An error while getting live game data: %s\n", err)
 		}
 
 		defer resp.Body.Close()
 		body, err := ioutil.ReadAll(resp.Body)
 
 		if err := json.Unmarshal(body, &feedData); err != nil {
-			panic(err)
+			fmt.Printf("An error while unmarshalling live game data: %s\n", err)
 		}
 
 		awayTeam = feedData.LiveData.LineScore.Teams.Away
@@ -146,7 +146,7 @@ func listenForGoals(link string, goalChan chan bool, winningTeam chan string) {
 }
 
 func playHornAndTurnOnLight(pin *rpio.Pin) {
-	hornDone := make(chan struct{})
-	go playHorn(hornDone)
+	hornDone := make(chan bool)
 	go turnOnLight(pin, hornDone)
+	go playHorn(hornDone)
 }

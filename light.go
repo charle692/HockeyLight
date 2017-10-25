@@ -2,7 +2,7 @@ package main
 
 import rpio "github.com/stianeikeland/go-rpio"
 
-func turnOnLight(pin *rpio.Pin, hornDone chan struct{}) {
+func turnOnLight(pin *rpio.Pin, hornDone chan bool) {
 	pin.Low()
 
 	select {
