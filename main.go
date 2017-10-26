@@ -11,7 +11,7 @@ import (
 )
 
 // TeamName - The team to listen to goals for
-const TeamName = "Ottawa Senators"
+const TeamName = "Calgary Flames"
 
 // Domain - The domain of the api
 const Domain = "https://statsapi.web.nhl.com"
@@ -91,6 +91,7 @@ func main() {
 			playHornAndTurnOnLight(pin)
 		case team := <-winningTeam:
 			if team == TeamName {
+				fmt.Printf("%s is the winning team!\n", team)
 				fmt.Printf("The %s have won!\n", TeamName)
 				playHornAndTurnOnLight(pin)
 			}
@@ -99,12 +100,11 @@ func main() {
 }
 
 func listenForGoals(link string, goalChan chan bool, winningTeam chan string) {
-	ticker := time.NewTicker(time.Second * 3)
+	ticker := time.NewTicker(time.Second * 2)
 	feedData := &FeedData{}
-	awayGoals := 0
-	homeGoals := 0
-	homeTeam := Home{}
-	awayTeam := Away{}
+	awayGoals, homeGoals := 0, 0
+	homeTeam, awayTeam := Home{}, Away{}
+	firstPull := true
 
 	for range ticker.C {
 		resp, err := http.Get(Domain + link)
@@ -124,13 +124,25 @@ func listenForGoals(link string, goalChan chan bool, winningTeam chan string) {
 		homeTeam = feedData.LiveData.LineScore.Teams.Home
 
 		if awayTeam.Team.Name == TeamName && awayTeam.Goals > awayGoals {
-			awayGoals = awayTeam.Goals
-			goalChan <- true
+			if firstPull {
+				awayGoals = awayTeam.Goals
+			} else {
+				awayGoals = awayTeam.Goals
+				goalChan <- true
+			}
 		}
 
 		if homeTeam.Team.Name == TeamName && homeTeam.Goals > homeGoals {
-			homeGoals = homeTeam.Goals
-			goalChan <- true
+			if firstPull {
+				homeGoals = homeTeam.Goals
+			} else {
+				homeGoals = homeTeam.Goals
+				goalChan <- true
+			}
+		}
+
+		if firstPull {
+			firstPull = false
 		}
 
 		if feedData.GameData.GameStatus.AbstractGameState == "Final" {
