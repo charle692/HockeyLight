@@ -11,7 +11,7 @@ import (
 )
 
 // TeamName - The team to listen to goals for
-const TeamName = "Calgary Flames"
+const TeamName = "Toronto Maple Leafs"
 
 // Domain - The domain of the api
 const Domain = "https://statsapi.web.nhl.com"

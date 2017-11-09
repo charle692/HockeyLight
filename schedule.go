@@ -1,8 +1,8 @@
 package main
 
 import (
+	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -47,9 +47,7 @@ type Status struct {
 const SchedulePath = "/api/v1/schedule"
 
 func retrieveSchedule(gameChan chan Game, waitingForGameToStart *bool, gameStarted *bool) {
-	// retrieve the schedule on initial load in case the device was powered off
-	getTodaysSchedule(gameChan)
-	ticker := time.NewTicker(time.Hour * 1)
+	ticker := time.NewTicker(time.Minute * 1)
 
 	for range ticker.C {
 		if !*gameStarted && !*waitingForGameToStart {
@@ -66,13 +64,13 @@ func getTodaysSchedule(gameChan chan Game) {
 	resp, err := http.Get(Domain + SchedulePath + "?startDate=" + date + "&endDate=" + date)
 
 	if err != nil {
-		log.Fatal(err)
+		fmt.Printf("An error occured while retrieving today's game data")
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
 
 	if err != nil {
-		log.Fatal(err)
+		fmt.Printf("An error occured while retrieving today's game data")
 	}
 
 	gjson.Unmarshal(body, &schedule)
