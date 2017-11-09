@@ -11,7 +11,7 @@ import (
 )
 
 // TeamName - The team to listen to goals for
-const TeamName = "Toronto Maple Leafs"
+const TeamName = "Tampa Bay Lightning"
 
 // Domain - The domain of the api
 const Domain = "https://statsapi.web.nhl.com"
@@ -158,7 +158,8 @@ func listenForGoals(link string, goalChan chan bool, winningTeam chan string) {
 }
 
 func playHornAndTurnOnLight(pin *rpio.Pin) {
-	hornDone := make(chan bool)
-	go turnOnLight(pin, hornDone)
-	go playHorn(hornDone)
+	go turnOnLight(pin)
+
+	fmt.Println("About to start playing horn!")
+	go playHorn()
 }

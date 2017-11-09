@@ -1,12 +1,18 @@
 package main
 
-import rpio "github.com/stianeikeland/go-rpio"
+import (
+	"fmt"
+	"time"
 
-func turnOnLight(pin *rpio.Pin, hornDone chan bool) {
+	rpio "github.com/stianeikeland/go-rpio"
+)
+
+func turnOnLight(pin *rpio.Pin) {
 	pin.Low()
+	ticker := time.NewTicker(time.Second * 30)
 
-	select {
-	case <-hornDone:
+	for range ticker.C {
+		fmt.Printf("30 seconds is up!\n")
 		pin.High()
 	}
 }
