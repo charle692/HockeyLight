@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"time"
 
 	rpio "github.com/stianeikeland/go-rpio"
@@ -9,12 +8,8 @@ import (
 
 func turnOnLight(pin *rpio.Pin) {
 	pin.Low()
-	ticker := time.NewTicker(time.Second * 30)
-
-	for range ticker.C {
-		fmt.Printf("30 seconds is up!\n")
-		pin.High()
-	}
+	time.Sleep(time.Second * 30)
+	pin.High()
 }
 
 func initializeGPIOPin() *rpio.Pin {

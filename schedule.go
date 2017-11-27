@@ -101,12 +101,9 @@ func waitForGameToStart(game Game, gameStartedChan chan string, waitingForGameTo
 
 	if startDateInUnix-currentTime > 0 {
 		timeUntilGameStarts := time.Duration(startDateInUnix - currentTime)
-		ticker := time.NewTicker((timeUntilGameStarts / 60) * time.Minute)
-
-		for range ticker.C {
-			gameStartedChan <- game.Link
-			return
-		}
+		time.Sleep((timeUntilGameStarts / 60) * time.Minute)
+		gameStartedChan <- game.Link
+		return
 	}
 
 	gameStartedChan <- game.Link

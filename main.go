@@ -2,16 +2,17 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
+	"os"
 	"time"
 
 	rpio "github.com/stianeikeland/go-rpio"
 )
 
 // TeamName - The team to listen to goals for
-const TeamName = "Tampa Bay Lightning"
+const TeamName = "Montréal Canadiens"
 
 // Domain - The domain of the api
 const Domain = "https://statsapi.web.nhl.com"
@@ -74,25 +75,27 @@ func main() {
 	waitingForGameToStart, gameStarted := false, false
 	gameChan, gameStartedChan, goalChan, winningTeam := make(chan Game), make(chan string), make(chan bool), make(chan string)
 	pin := initializeGPIOPin()
+	f := initLogFile()
+	defer f.Close()
 	go retrieveSchedule(gameChan, &waitingForGameToStart, &gameStarted)
 
 	for {
 		select {
 		case game := <-gameChan:
-			fmt.Printf("The %s are playing today!\n", TeamName)
+			log.Printf("The %s are playing today!\n", TeamName)
 			go waitForGameToStart(game, gameStartedChan, &waitingForGameToStart)
 		case link := <-gameStartedChan:
 			gameStarted = true
-			fmt.Println("The game has started!")
+			log.Println("The game has started!")
 			playHornAndTurnOnLight(pin)
 			go listenForGoals(link, goalChan, winningTeam)
 		case <-goalChan:
-			fmt.Printf("The %s have scored!\n", TeamName)
+			log.Printf("The %s have scored!\n", TeamName)
 			playHornAndTurnOnLight(pin)
 		case team := <-winningTeam:
 			if team == TeamName {
-				fmt.Printf("%s is the winning team!\n", team)
-				fmt.Printf("The %s have won!\n", TeamName)
+				log.Printf("%s is the winning team!\n", team)
+				log.Printf("The %s have won!\n", TeamName)
 				playHornAndTurnOnLight(pin)
 			}
 		}
@@ -110,14 +113,14 @@ func listenForGoals(link string, goalChan chan bool, winningTeam chan string) {
 		resp, err := http.Get(Domain + link)
 
 		if err != nil {
-			fmt.Printf("An error while getting live game data: %s\n", err)
+			log.Printf("An error while getting live game data: %s\n", err)
 		}
 
 		defer resp.Body.Close()
 		body, err := ioutil.ReadAll(resp.Body)
 
 		if err := json.Unmarshal(body, &feedData); err != nil {
-			fmt.Printf("An error while unmarshalling live game data: %s\n", err)
+			log.Printf("An error while unmarshalling live game data: %s\n", err)
 		}
 
 		awayTeam = feedData.LiveData.LineScore.Teams.Away
@@ -152,6 +155,7 @@ func listenForGoals(link string, goalChan chan bool, winningTeam chan string) {
 				winningTeam <- homeTeam.Team.Name
 			}
 
+			ticker.Stop()
 			return
 		}
 	}
@@ -159,7 +163,16 @@ func listenForGoals(link string, goalChan chan bool, winningTeam chan string) {
 
 func playHornAndTurnOnLight(pin *rpio.Pin) {
 	go turnOnLight(pin)
-
-	fmt.Println("About to start playing horn!")
 	go playHorn()
+}
+
+func initLogFile() *os.File {
+	f, err := os.OpenFile("hockey_light.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+
+	if err != nil {
+		log.Printf("error opening file: %v", err)
+	}
+
+	log.SetOutput(f)
+	return f
 }

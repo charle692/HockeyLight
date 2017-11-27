@@ -7,15 +7,14 @@ import (
 )
 
 func playHorn() {
-	fileName := "./horns/"
+	fileName := "/home/pi/horns/"
 	fileName += strings.Replace(strings.ToLower(TeamName), " ", "_", -1)
-	fileName += ".wav"
+	fileName += ".mp3"
 
 	cmdArgs := []string{fileName}
-	fmt.Printf("Playing horn: %s\n", fileName)
-	_, err := exec.Command("aplay", cmdArgs...).Output()
+	_, err := exec.Command("mpg123", cmdArgs...).Output()
 
 	if err != nil {
-		fmt.Printf("There was an error running aplay: %s\n", err)
+		fmt.Printf("There was an error running mpg123: %s\n", err)
 	}
 }
