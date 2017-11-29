@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -78,6 +79,7 @@ func main() {
 	f := initLogFile()
 	defer f.Close()
 	go retrieveSchedule(gameChan, &waitingForGameToStart, &gameStarted)
+	go startSSDPServer()
 
 	for {
 		select {
@@ -87,14 +89,16 @@ func main() {
 		case link := <-gameStartedChan:
 			gameStarted = true
 			log.Println("The game has started!")
+			fmt.Println("The game has started!")
 			playHornAndTurnOnLight(pin)
 			go listenForGoals(link, goalChan, winningTeam)
 		case <-goalChan:
 			log.Printf("The %s have scored!\n", TeamName)
+			fmt.Println("They have scored!")
 			playHornAndTurnOnLight(pin)
 		case team := <-winningTeam:
 			if team == TeamName {
-				log.Printf("%s is the winning team!\n", team)
+				fmt.Println("They have won!")
 				log.Printf("The %s have won!\n", TeamName)
 				playHornAndTurnOnLight(pin)
 			}
@@ -123,6 +127,9 @@ func listenForGoals(link string, goalChan chan bool, winningTeam chan string) {
 			log.Printf("An error while unmarshalling live game data: %s\n", err)
 		}
 
+		fmt.Println("Pulling data")
+		fmt.Printf("First Pull?: %v\n", firstPull)
+
 		awayTeam = feedData.LiveData.LineScore.Teams.Away
 		homeTeam = feedData.LiveData.LineScore.Teams.Home
 
@@ -132,6 +139,7 @@ func listenForGoals(link string, goalChan chan bool, winningTeam chan string) {
 			} else {
 				awayGoals = awayTeam.Goals
 				goalChan <- true
+				fmt.Println("They have scored!")
 			}
 		}
 
@@ -141,6 +149,7 @@ func listenForGoals(link string, goalChan chan bool, winningTeam chan string) {
 			} else {
 				homeGoals = homeTeam.Goals
 				goalChan <- true
+				fmt.Println("They have scored!")
 			}
 		}
 
