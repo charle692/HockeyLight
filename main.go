@@ -80,6 +80,7 @@ func main() {
 	defer f.Close()
 	go retrieveSchedule(gameChan, &waitingForGameToStart, &gameStarted)
 	go startSSDPServer()
+	go startHTTPServer(pin)
 
 	for {
 		select {
@@ -89,16 +90,14 @@ func main() {
 		case link := <-gameStartedChan:
 			gameStarted = true
 			log.Println("The game has started!")
-			fmt.Println("The game has started!")
 			playHornAndTurnOnLight(pin)
 			go listenForGoals(link, goalChan, winningTeam)
 		case <-goalChan:
 			log.Printf("The %s have scored!\n", TeamName)
-			fmt.Println("They have scored!")
 			playHornAndTurnOnLight(pin)
 		case team := <-winningTeam:
 			if team == TeamName {
-				fmt.Println("They have won!")
+				gameStarted = false
 				log.Printf("The %s have won!\n", TeamName)
 				playHornAndTurnOnLight(pin)
 			}
@@ -176,7 +175,7 @@ func playHornAndTurnOnLight(pin *rpio.Pin) {
 }
 
 func initLogFile() *os.File {
-	f, err := os.OpenFile("hockey_light.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	f, err := os.OpenFile("/home/pi/hockey_light.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 
 	if err != nil {
 		log.Printf("error opening file: %v", err)
