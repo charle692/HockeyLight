@@ -6,17 +6,15 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"os"
 	"time"
 
 	rpio "github.com/stianeikeland/go-rpio"
 )
 
-// TeamName - The team to listen to goals for
-const TeamName = "Montréal Canadiens"
-
 // Domain - The domain of the api
 const Domain = "https://statsapi.web.nhl.com"
+
+var db = initDatabase()
 
 // FeedData - Contains game feed data
 type FeedData struct {
@@ -62,11 +60,6 @@ type Away struct {
 	Goals int  `json:"goals"`
 }
 
-// Team - Contains team name
-type Team struct {
-	Name string `json:"name"`
-}
-
 // TeamData - Contains the team name
 type TeamData struct {
 	Name string `json:"name"`
@@ -76,8 +69,13 @@ func main() {
 	waitingForGameToStart, gameStarted := false, false
 	gameChan, gameStartedChan, goalChan, winningTeam := make(chan Game), make(chan string), make(chan bool), make(chan string)
 	pin := initializeGPIOPin()
+
 	f := initLogFile()
 	defer f.Close()
+
+	db.LogMode(true)
+	defer db.Close()
+
 	go retrieveSchedule(gameChan, &waitingForGameToStart, &gameStarted)
 	go startSSDPServer()
 	go startHTTPServer(pin)
@@ -85,7 +83,7 @@ func main() {
 	for {
 		select {
 		case game := <-gameChan:
-			log.Printf("The %s are playing today!\n", TeamName)
+			log.Printf("The %s are playing today!\n", getSelectedTeamName())
 			go waitForGameToStart(game, gameStartedChan, &waitingForGameToStart)
 		case link := <-gameStartedChan:
 			gameStarted = true
@@ -93,12 +91,12 @@ func main() {
 			playHornAndTurnOnLight(pin)
 			go listenForGoals(link, goalChan, winningTeam)
 		case <-goalChan:
-			log.Printf("The %s have scored!\n", TeamName)
+			log.Printf("The %s have scored!\n", getSelectedTeamName())
 			playHornAndTurnOnLight(pin)
 		case team := <-winningTeam:
-			if team == TeamName {
+			if team == getSelectedTeamName() {
 				gameStarted = false
-				log.Printf("The %s have won!\n", TeamName)
+				log.Printf("The %s have won!\n", getSelectedTeamName())
 				playHornAndTurnOnLight(pin)
 			}
 		}
@@ -132,7 +130,7 @@ func listenForGoals(link string, goalChan chan bool, winningTeam chan string) {
 		awayTeam = feedData.LiveData.LineScore.Teams.Away
 		homeTeam = feedData.LiveData.LineScore.Teams.Home
 
-		if awayTeam.Team.Name == TeamName && awayTeam.Goals > awayGoals {
+		if awayTeam.Team.Name == getSelectedTeamName() && awayTeam.Goals > awayGoals {
 			if firstPull {
 				awayGoals = awayTeam.Goals
 			} else {
@@ -142,7 +140,7 @@ func listenForGoals(link string, goalChan chan bool, winningTeam chan string) {
 			}
 		}
 
-		if homeTeam.Team.Name == TeamName && homeTeam.Goals > homeGoals {
+		if homeTeam.Team.Name == getSelectedTeamName() && homeTeam.Goals > homeGoals {
 			if firstPull {
 				homeGoals = homeTeam.Goals
 			} else {
@@ -172,15 +170,4 @@ func listenForGoals(link string, goalChan chan bool, winningTeam chan string) {
 func playHornAndTurnOnLight(pin *rpio.Pin) {
 	go turnOnLight(pin)
 	go playHorn()
-}
-
-func initLogFile() *os.File {
-	f, err := os.OpenFile("/home/pi/hockey_light.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-
-	if err != nil {
-		log.Printf("error opening file: %v", err)
-	}
-
-	log.SetOutput(f)
-	return f
 }

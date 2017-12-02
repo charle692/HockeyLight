@@ -8,7 +8,7 @@ import (
 
 func playHorn() {
 	fileName := "/home/pi/horns/"
-	fileName += strings.Replace(strings.ToLower(TeamName), " ", "_", -1)
+	fileName += strings.Replace(strings.ToLower(getSelectedTeamName()), " ", "_", -1)
 	fileName += ".mp3"
 
 	cmdArgs := []string{fileName}

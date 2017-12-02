@@ -85,7 +85,7 @@ func isTeamPlayingToday(schedule *Schedule, gameChan chan Game) {
 
 		for x := 0; x < len(date.Games); x++ {
 			game := date.Games[x]
-			if (game.Teams.Home.Team.Name == TeamName || game.Teams.Away.Team.Name == TeamName) && game.Status.DetailedState != "Final" {
+			if (game.Teams.Home.Team.Name == getSelectedTeamName() || game.Teams.Away.Team.Name == getSelectedTeamName()) && game.Status.DetailedState != "Final" {
 				gameChan <- game
 			}
 		}
