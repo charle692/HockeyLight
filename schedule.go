@@ -1,13 +1,13 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
-
-	"github.com/tidwall/gjson"
 )
 
 // Schedule - Contains game schedule of the day
@@ -46,21 +46,21 @@ type Status struct {
 // SchedulePath - Path to schedule
 const SchedulePath = "/api/v1/schedule"
 
-func retrieveSchedule(gameChan chan Game, waitingForGameToStart *bool, gameStarted *bool) {
-	ticker := time.NewTicker(time.Minute * 1)
-
-	for range ticker.C {
-		if !*gameStarted && !*waitingForGameToStart {
-			getTodaysSchedule(gameChan)
+func waitForGameToStart(newTeamSelected chan bool, gameStarted *bool) <-chan string {
+	gameStartedChan := make(chan string)
+	go func() {
+		for range time.NewTicker(time.Second * 30).C {
+			if !*gameStarted {
+				retrieveTodaysSchedule(newTeamSelected, gameStartedChan)
+			}
 		}
-	}
+	}()
+	return gameStartedChan
 }
 
-func getTodaysSchedule(gameChan chan Game) {
+func retrieveTodaysSchedule(newTeamSelected chan bool, gameStartedChan chan string) {
 	schedule := &Schedule{}
-	time := time.Now()
-	year, month, day := time.Date()
-	date := strconv.Itoa(year) + "-" + strconv.Itoa(int(month)) + "-" + strconv.Itoa(day)
+	date := today()
 	resp, err := http.Get(Domain + SchedulePath + "?startDate=" + date + "&endDate=" + date)
 
 	if err != nil {
@@ -68,47 +68,58 @@ func getTodaysSchedule(gameChan chan Game) {
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
+	defer resp.Body.Close()
 
 	if err != nil {
 		fmt.Printf("An error occured while retrieving today's game data")
 	}
 
-	gjson.Unmarshal(body, &schedule)
-	resp.Body.Close()
-	isTeamPlayingToday(schedule, gameChan)
+	json.Unmarshal(body, schedule)
+	isTeamPlayingToday(schedule, newTeamSelected, gameStartedChan)
 }
 
-// Modify this to determine if today's game has already passed
-func isTeamPlayingToday(schedule *Schedule, gameChan chan Game) {
+func isTeamPlayingToday(schedule *Schedule, newTeamSelected chan bool, gameStartedChan chan string) {
 	for i := 0; i < len(schedule.Dates); i++ {
 		date := schedule.Dates[i]
 
 		for x := 0; x < len(date.Games); x++ {
 			game := date.Games[x]
-			if (game.Teams.Home.Team.Name == getSelectedTeamName() || game.Teams.Away.Team.Name == getSelectedTeamName()) && game.Status.DetailedState != "Final" {
-				gameChan <- game
+			selectedTeam := getSelectedTeamName()
+
+			if (game.Teams.Home.Team.Name == selectedTeam || game.Teams.Away.Team.Name == selectedTeam) && game.Status.DetailedState != "Final" {
+				log.Printf("The %s are playing today!\n", selectedTeam)
+				waitUntilGameStarts(game, newTeamSelected, gameStartedChan)
+				return
 			}
 		}
 	}
 }
 
-func waitForGameToStart(game Game, gameStartedChan chan string, waitingForGameToStart *bool) {
-	setWaitingForGameToStart(waitingForGameToStart, true)
-	defer setWaitingForGameToStart(waitingForGameToStart, false)
+func waitUntilGameStarts(game Game, newTeamSelected chan bool, gameStartedChan chan string) {
 	startDate, _ := time.Parse(time.RFC3339, game.GameDate)
 	startDateInUnix := startDate.Unix()
 	currentTime := time.Now().Unix()
 
 	if startDateInUnix-currentTime > 0 {
 		timeUntilGameStarts := time.Duration(startDateInUnix - currentTime)
-		time.Sleep((timeUntilGameStarts / 60) * time.Minute)
-		gameStartedChan <- game.Link
-		return
+
+		select {
+		case <-newTeamSelected:
+			log.Println("New team selected, stopped waiting for game.")
+			return
+		case <-time.After(time.Minute * (timeUntilGameStarts / 60)):
+			log.Println("The game has started!")
+			gameStartedChan <- game.Link
+			return
+		}
 	}
 
+	log.Println("The game has started!")
 	gameStartedChan <- game.Link
 }
 
-func setWaitingForGameToStart(waitingForGameToStart *bool, status bool) {
-	*waitingForGameToStart = status
+func today() string {
+	time := time.Now()
+	year, month, day := time.Date()
+	return strconv.Itoa(year) + "-" + strconv.Itoa(int(month)) + "-" + strconv.Itoa(day)
 }

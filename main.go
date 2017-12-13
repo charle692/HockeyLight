@@ -2,12 +2,15 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
+	"github.com/charle692/hockeyLight/mp3"
+	"github.com/charle692/hockeyLight/ssdp"
 	rpio "github.com/stianeikeland/go-rpio"
 )
 
@@ -66,9 +69,9 @@ type TeamData struct {
 }
 
 func main() {
-	waitingForGameToStart, gameStarted := false, false
-	gameChan, gameStartedChan, goalChan, winningTeam := make(chan Game), make(chan string), make(chan bool), make(chan string)
-	pin := initializeGPIOPin()
+	gameStarted := false
+	goalChan, winningTeam := make(chan bool), make(chan string)
+	newTeamSelected := make(chan bool)
 
 	f := initLogFile()
 	defer f.Close()
@@ -76,98 +79,105 @@ func main() {
 	db.LogMode(true)
 	defer db.Close()
 
-	go retrieveSchedule(gameChan, &waitingForGameToStart, &gameStarted)
-	go startSSDPServer()
-	go startHTTPServer(pin)
+	pin := initializeGPIOPin()
+	gameStartedChan := waitForGameToStart(newTeamSelected, &gameStarted)
+	ssdp.Start("my:hockey-light", "Hockey Light SSDP")
+	go startHTTPServer(pin, newTeamSelected)
 
 	for {
 		select {
-		case game := <-gameChan:
-			log.Printf("The %s are playing today!\n", getSelectedTeamName())
-			go waitForGameToStart(game, gameStartedChan, &waitingForGameToStart)
 		case link := <-gameStartedChan:
 			gameStarted = true
-			log.Println("The game has started!")
 			playHornAndTurnOnLight(pin)
-			go listenForGoals(link, goalChan, winningTeam)
+			go listenForGoals(link, goalChan, winningTeam, newTeamSelected, &gameStarted)
 		case <-goalChan:
-			log.Printf("The %s have scored!\n", getSelectedTeamName())
 			playHornAndTurnOnLight(pin)
 		case team := <-winningTeam:
 			if team == getSelectedTeamName() {
 				gameStarted = false
-				log.Printf("The %s have won!\n", getSelectedTeamName())
 				playHornAndTurnOnLight(pin)
 			}
 		}
 	}
 }
 
-func listenForGoals(link string, goalChan chan bool, winningTeam chan string) {
+func listenForGoals(link string, goalChan chan bool, winningTeam chan string, newTeamSelected chan bool, gameStarted *bool) {
 	ticker := time.NewTicker(time.Second * 2)
-	feedData := &FeedData{}
 	awayGoals, homeGoals := 0, 0
-	homeTeam, awayTeam := Home{}, Away{}
+	selectedTeam := getSelectedTeamName()
 	firstPull := true
 
 	for range ticker.C {
-		resp, err := http.Get(Domain + link)
-
-		if err != nil {
-			log.Printf("An error while getting live game data: %s\n", err)
-		}
-
-		defer resp.Body.Close()
-		body, err := ioutil.ReadAll(resp.Body)
-
-		if err := json.Unmarshal(body, &feedData); err != nil {
-			log.Printf("An error while unmarshalling live game data: %s\n", err)
-		}
-
-		fmt.Println("Pulling data")
-		fmt.Printf("First Pull?: %v\n", firstPull)
-
-		awayTeam = feedData.LiveData.LineScore.Teams.Away
-		homeTeam = feedData.LiveData.LineScore.Teams.Home
-
-		if awayTeam.Team.Name == getSelectedTeamName() && awayTeam.Goals > awayGoals {
-			if firstPull {
-				awayGoals = awayTeam.Goals
-			} else {
-				awayGoals = awayTeam.Goals
-				goalChan <- true
-				fmt.Println("They have scored!")
-			}
-		}
-
-		if homeTeam.Team.Name == getSelectedTeamName() && homeTeam.Goals > homeGoals {
-			if firstPull {
-				homeGoals = homeTeam.Goals
-			} else {
-				homeGoals = homeTeam.Goals
-				goalChan <- true
-				fmt.Println("They have scored!")
-			}
-		}
-
-		if firstPull {
-			firstPull = false
-		}
-
-		if feedData.GameData.GameStatus.AbstractGameState == "Final" {
-			if awayGoals > homeGoals {
-				winningTeam <- awayTeam.Team.Name
-			} else {
-				winningTeam <- homeTeam.Team.Name
-			}
-
+		select {
+		case <-newTeamSelected:
+			*gameStarted = false
 			ticker.Stop()
 			return
+		default:
+			awayTeam, homeTeam, gameState := retrieveGameData(link)
+
+			if firstPull {
+				firstPull = false
+				awayGoals = awayTeam.Goals
+				homeGoals = homeTeam.Goals
+			} else {
+				if awayTeam.Team.Name == selectedTeam && awayTeam.Goals > awayGoals {
+					log.Printf("The %s have scored!\n", getSelectedTeamName())
+					awayGoals = awayTeam.Goals
+					goalChan <- true
+				}
+
+				if homeTeam.Team.Name == selectedTeam && homeTeam.Goals > homeGoals {
+					log.Printf("The %s have scored!\n", getSelectedTeamName())
+					homeGoals = homeTeam.Goals
+					goalChan <- true
+				}
+
+				if gameState == "Final" {
+					if awayGoals > homeGoals {
+						winningTeam <- awayTeam.Team.Name
+					} else {
+						winningTeam <- homeTeam.Team.Name
+					}
+
+					ticker.Stop()
+					return
+				}
+			}
 		}
 	}
 }
 
+func retrieveGameData(link string) (Away, Home, string) {
+	feedData := &FeedData{}
+	resp, err := http.Get(Domain + link)
+
+	if err != nil {
+		log.Printf("An error while getting live game data: %s\n", err)
+	}
+
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+
+	if err := json.Unmarshal(body, feedData); err != nil {
+		log.Printf("An error while unmarshalling live game data: %s\n", err)
+	}
+
+	return feedData.LiveData.LineScore.Teams.Away,
+		feedData.LiveData.LineScore.Teams.Home,
+		feedData.GameData.GameStatus.AbstractGameState
+}
+
 func playHornAndTurnOnLight(pin *rpio.Pin) {
+	delay, _ := strconv.Atoi(getDelay().Value)
+	time.Sleep(time.Second * time.Duration(delay))
 	go turnOnLight(pin)
-	go playHorn()
+	go mp3.Play(hornFilePath())
+}
+
+func hornFilePath() string {
+	fileName := "/home/pi/horns/"
+	fileName += strings.Replace(strings.ToLower(getSelectedTeamName()), " ", "_", -1)
+	fileName += ".mp3"
+	return fileName
 }

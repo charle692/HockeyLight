@@ -13,6 +13,6 @@ func initDatabase() *gorm.DB {
 		log.Printf("Error connecting to database: %s\n", err)
 	}
 
-	db.AutoMigrate(&Team{})
+	db.AutoMigrate(&Team{}, &Delay{})
 	return db
 }

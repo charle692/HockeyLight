@@ -21,7 +21,7 @@ func getSelectedTeam() *Team {
 
 func getTeams() *[]Team {
 	teams := &[]Team{}
-	db.Find(teams)
+	db.Order("name asc").Find(teams)
 	return teams
 }
 
