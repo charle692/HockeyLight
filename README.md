@@ -4,8 +4,8 @@ This project basically recreates the Budweiser Red Light.
 
 This project has 3 parts:
 1. The Goal light itself
-2. An app that is used to configure the goal light, which is found [here] (https://github.com/charle692/HockeyLightMobile)
-3. Auto wifi configuration using [pi-wifi] (https://github.com/charle692/pi-wifi)
+2. An app that is used to configure the goal light, which is found [here](https://github.com/charle692/HockeyLightMobile)
+3. Auto wifi configuration using [pi-wifi](https://github.com/charle692/pi-wifi)
 
 ## Inspiration
 - https://github.com/arim215/nhl_goal_light
@@ -14,10 +14,10 @@ This project has 3 parts:
 First off, this project is created for the Raspberry pi. However, it may work on other devices.
 
 - Clone the repository
-- Compile the code using [xgo] (https://github.com/karalabe/xgo, `xgo -out main --targets=linux/arm "path to project root"`.
+- Compile the code using [xgo](https://github.com/karalabe/xgo), `xgo -out main --targets=linux/arm "path to project root"`.
 - Transfer the binary and the `hockey_light.db` to `/home/pi` on your Raspberry pi.
 - Create a service that runs the binary
-- Use the [mobile app] (https://github.com/charle692/HockeyLightMobile) to configure the HockeyLight
+- Use the [mobile app](https://github.com/charle692/HockeyLightMobile) to configure the HockeyLight
 
 ## Hardware
 - Raspberry Pi
