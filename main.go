@@ -86,10 +86,12 @@ func main() {
 
 	for {
 		select {
-		case link := <-gameStartedChan:
+		case game := <-gameStartedChan:
 			gameStarted = true
-			playHornAndTurnOnLight(pin)
-			go listenForGoals(link, goalChan, winningTeam, newTeamSelected, &gameStarted)
+			if !strings.Contains(game.Status.DetailedState, "In Progress") {
+				playHornAndTurnOnLight(pin)
+			}
+			go listenForGoals(game.Link, goalChan, winningTeam, newTeamSelected, &gameStarted)
 		case <-goalChan:
 			playHornAndTurnOnLight(pin)
 		case team := <-winningTeam:

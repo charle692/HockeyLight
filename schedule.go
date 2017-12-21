@@ -46,8 +46,8 @@ type Status struct {
 // SchedulePath - Path to schedule
 const SchedulePath = "/api/v1/schedule"
 
-func waitForGameToStart(newTeamSelected chan bool, gameStarted *bool) <-chan string {
-	gameStartedChan := make(chan string)
+func waitForGameToStart(newTeamSelected chan bool, gameStarted *bool) <-chan Game {
+	gameStartedChan := make(chan Game)
 	go func() {
 		for range time.NewTicker(time.Second * 30).C {
 			if !*gameStarted {
@@ -58,7 +58,7 @@ func waitForGameToStart(newTeamSelected chan bool, gameStarted *bool) <-chan str
 	return gameStartedChan
 }
 
-func retrieveTodaysSchedule(newTeamSelected chan bool, gameStartedChan chan string) {
+func retrieveTodaysSchedule(newTeamSelected chan bool, gameStartedChan chan Game) {
 	schedule := &Schedule{}
 	date := today()
 	resp, err := http.Get(Domain + SchedulePath + "?startDate=" + date + "&endDate=" + date)
@@ -78,7 +78,7 @@ func retrieveTodaysSchedule(newTeamSelected chan bool, gameStartedChan chan stri
 	isTeamPlayingToday(schedule, newTeamSelected, gameStartedChan)
 }
 
-func isTeamPlayingToday(schedule *Schedule, newTeamSelected chan bool, gameStartedChan chan string) {
+func isTeamPlayingToday(schedule *Schedule, newTeamSelected chan bool, gameStartedChan chan Game) {
 	for i := 0; i < len(schedule.Dates); i++ {
 		date := schedule.Dates[i]
 
@@ -95,7 +95,7 @@ func isTeamPlayingToday(schedule *Schedule, newTeamSelected chan bool, gameStart
 	}
 }
 
-func waitUntilGameStarts(game Game, newTeamSelected chan bool, gameStartedChan chan string) {
+func waitUntilGameStarts(game Game, newTeamSelected chan bool, gameStartedChan chan Game) {
 	startDate, _ := time.Parse(time.RFC3339, game.GameDate)
 	startDateInUnix := startDate.Unix()
 	currentTime := time.Now().Unix()
@@ -109,13 +109,13 @@ func waitUntilGameStarts(game Game, newTeamSelected chan bool, gameStartedChan c
 			return
 		case <-time.After(time.Minute * (timeUntilGameStarts / 60)):
 			log.Println("The game has started!")
-			gameStartedChan <- game.Link
+			gameStartedChan <- game
 			return
 		}
 	}
 
 	log.Println("The game has started!")
-	gameStartedChan <- game.Link
+	gameStartedChan <- game
 }
 
 func today() string {
