@@ -87,11 +87,13 @@ func main() {
 	for {
 		select {
 		case game := <-gameStartedChan:
-			gameStarted = true
-			if !strings.Contains(game.Status.DetailedState, "In Progress") {
-				playHornAndTurnOnLight(pin)
+			if !gameStarted {
+				gameStarted = true
+				if !strings.Contains(game.Status.DetailedState, "In Progress") {
+					playHornAndTurnOnLight(pin)
+				}
+				go listenForGoals(game.Link, goalChan, winningTeam, newTeamSelected, &gameStarted)
 			}
-			go listenForGoals(game.Link, goalChan, winningTeam, newTeamSelected, &gameStarted)
 		case <-goalChan:
 			playHornAndTurnOnLight(pin)
 		case team := <-winningTeam:
@@ -136,7 +138,7 @@ func listenForGoals(link string, goalChan chan bool, winningTeam chan string, ne
 				}
 
 				if gameState == "Final" {
-					if awayGoals > homeGoals {
+					if awayTeam.Team.Name == selectedTeam && awayGoals > homeGoals {
 						winningTeam <- awayTeam.Team.Name
 					} else {
 						winningTeam <- homeTeam.Team.Name
